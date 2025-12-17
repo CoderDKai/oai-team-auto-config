@@ -171,14 +171,40 @@ def register_openai_account(page, email: str, password: str) -> bool:
 
         # 等待页面跳转到 auth.openai.com
         log.step("等待跳转到登录页面...")
+        jumped_to_auth = False
         for _ in range(15):  # 最多等待 15 秒
             current_url = page.url
             if "auth.openai.com" in current_url:
+                jumped_to_auth = True
                 break
             time.sleep(1)
 
         current_url = page.url
         log.step(f"当前页面: {current_url}")
+
+        # 如果没有跳转到 auth.openai.com，检查是否在 chatgpt.com 弹窗中
+        if not jumped_to_auth and "chatgpt.com" in current_url:
+            log.step("未跳转到 auth 页面，尝试在当前弹窗中输入邮箱...")
+            email_input = page.ele('css:input[type="email"], input[name="email"], input[id="email"]', timeout=5)
+            if email_input:
+                log.step("检测到邮箱输入框，在弹窗中输入邮箱...")
+                type_slowly(page, 'css:input[type="email"], input[name="email"], input[id="email"]', email)
+                log.success("邮箱已输入")
+
+                # 点击继续
+                log.step("点击继续...")
+                continue_btn = page.ele('css:button[type="submit"]', timeout=10)
+                if continue_btn:
+                    continue_btn.click()
+
+                # 等待页面跳转到密码页面 (log-in/password 或 create-account/password)
+                log.step("等待跳转到密码页面...")
+                for _ in range(15):
+                    current_url = page.url
+                    if "/password" in current_url:
+                        log.success(f"已跳转到密码页面: {current_url}")
+                        break
+                    time.sleep(1)
 
         # === 使用循环处理整个注册流程 ===
         max_steps = 10  # 防止无限循环
