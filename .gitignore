@@ -16,6 +16,10 @@ config.toml
 accounts.csv
 team.json
 team_tracker.json
+domain_blacklist.json
+
+# Logs
+logs/
 
 # IDE
 .idea/
@@ -28,3 +32,4 @@ team_tracker.json
 Thumbs.db
 nul
 
+.claude/settings.local.json
