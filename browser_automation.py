@@ -14,8 +14,11 @@ from config import (
     BROWSER_SHORT_WAIT,
     BROWSER_HEADLESS,
     AUTH_PROVIDER,
+    PROXY_ENABLED,
     get_random_name,
-    get_random_birthday
+    get_random_birthday,
+    get_next_proxy,
+    format_proxy_url
 )
 from email_service import unified_get_verification_code
 from crs_service import crs_generate_auth_url, crs_exchange_code, crs_add_account, extract_code_from_url
@@ -213,7 +216,24 @@ def init_browser(max_retries: int = BROWSER_MAX_RETRIES) -> ChromiumPage:
                 log.step("启动 Chrome (无头模式)...")
             else:
                 log.step("启动 Chrome (无痕模式)...")
-            
+
+            # 代理设置
+            if PROXY_ENABLED:
+                proxy = get_next_proxy()
+                if proxy:
+                    # DrissionPage 不支持 socks5，只能用 http/https
+                    proxy_type = proxy.get("type", "http")
+                    if proxy_type.startswith("socks"):
+                        log.warning(f"DrissionPage 不支持 {proxy_type} 代理，跳过代理设置")
+                    else:
+                        proxy_url = format_proxy_url(proxy)
+                        if proxy_url:
+                            co.set_argument(f'--proxy-server={proxy_url}')
+                            log.info(f"使用代理: {proxy.get('host')}:{proxy.get('port')}")
+            else:
+                # 无代理时忽略系统代理
+                co.set_argument('--no-proxy-server')
+
             # 设置超时
             co.set_timeouts(base=PAGE_LOAD_TIMEOUT, page_load=PAGE_LOAD_TIMEOUT * 2)
             

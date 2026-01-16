@@ -404,6 +404,30 @@ def format_proxy_url(proxy: dict) -> str:
     return f"{p_type}://{host}:{port}"
 
 
+def get_proxy_dict() -> dict:
+    """获取 requests 库使用的代理字典格式
+
+    Returns:
+        dict: {"http": "http://...", "https": "http://..."} 或 None
+    """
+    if not PROXY_ENABLED or not PROXIES:
+        return None
+
+    proxy = get_next_proxy()
+    if not proxy:
+        return None
+
+    proxy_url = format_proxy_url(proxy)
+    if not proxy_url:
+        return None
+
+    # requests 库的代理格式
+    return {
+        "http": proxy_url,
+        "https": proxy_url
+    }
+
+
 # ==================== 随机姓名列表 ====================
 FIRST_NAMES = [
     "James", "John", "Robert", "Michael", "William", "David", "Richard", "Joseph",

@@ -18,7 +18,9 @@ from config import (
     REQUEST_TIMEOUT,
     VERIFICATION_CODE_INTERVAL,
     VERIFICATION_CODE_MAX_RETRIES,
+    PROXY_ENABLED,
     get_random_domain,
+    get_proxy_dict,
     EMAIL_PROVIDER,
     GPTMAIL_API_BASE,
     GPTMAIL_API_KEY,
@@ -41,6 +43,13 @@ def create_session_with_retry():
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
+
+    # 代理设置
+    if PROXY_ENABLED:
+        proxy_dict = get_proxy_dict()
+        if proxy_dict:
+            session.proxies = proxy_dict
+
     return session
 
 

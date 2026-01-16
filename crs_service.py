@@ -12,6 +12,8 @@ from config import (
     REQUEST_TIMEOUT,
     USER_AGENT,
     TEAMS,
+    PROXY_ENABLED,
+    get_proxy_dict,
 )
 from logger import log
 
@@ -28,6 +30,13 @@ def create_session_with_retry():
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
+
+    # 代理设置
+    if PROXY_ENABLED:
+        proxy_dict = get_proxy_dict()
+        if proxy_dict:
+            session.proxies = proxy_dict
+
     return session
 
 

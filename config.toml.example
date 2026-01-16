@@ -2,6 +2,11 @@
 # 复制此文件为 config.toml 并填入你的配置
 # 本配置文件用于管理 OpenAI Team 账号批量注册系统的各项参数
 
+# ==================== 代理配置 (顶级配置) ====================
+# 重要: proxy_enabled 必须放在所有 [section] 之前，否则会被解析到错误的 section
+# 是否启用代理 (默认关闭)
+proxy_enabled = false
+
 # ==================== 邮箱服务配置 ====================
 # 邮箱系统选择:
 #   - "cloudmail": Cloud Mail 自建邮箱系统，需要先创建用户才能收信
@@ -171,20 +176,24 @@ short_wait = 10
 # 无头模式 (服务器运行时设为 true)
 headless = false
 
-# ==================== 代理配置 ====================
-# 是否启用代理 (默认关闭)
-proxy_enabled = false
+# ==================== 文件配置 ====================
+[files]
+# 导出账号信息的 CSV 文件路径
+csv_file = "accounts.csv"
+# Team 注册进度追踪文件路径
+tracker_file = "team_tracker.json"
 
+# ==================== 代理列表配置 (放在文件末尾) ====================
 # 支持配置多个代理，程序会轮换使用
-# type: 代理类型 (socks5/http/https)
+# type: 代理类型 (http/https，注意: DrissionPage 不支持 socks5)
 # host: 代理服务器地址
 # port: 代理端口
 # username/password: 代理认证信息 (可选)
 
 # [[proxies]]
-# type = "socks5"
+# type = "http"
 # host = "127.0.0.1"
-# port = 1080
+# port = 7890
 # username = ""
 # password = ""
 
@@ -194,10 +203,3 @@ proxy_enabled = false
 # port = 8080
 # username = "user"
 # password = "pass"
-
-# ==================== 文件配置 ====================
-[files]
-# 导出账号信息的 CSV 文件路径
-csv_file = "accounts.csv"
-# Team 注册进度追踪文件路径
-tracker_file = "team_tracker.json"
