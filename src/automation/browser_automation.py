@@ -2602,7 +2602,8 @@ def login_and_get_session(
             if "chatgpt.com" in current_url and "auth.openai.com" not in current_url:
                 if is_logged_in(page):
                     log.success("登录成功")
-                    # 检查并选择工作空间
+                    _check_and_select_team_workspace_dialog(page)
+                    time.sleep(1)
                     _check_and_select_workspace(page)
                     time.sleep(1)
                     return _fetch_session_data(page)
@@ -3022,6 +3023,40 @@ def login_and_authorize_team_owner(
                         "expires_at": expires_at,
                         "authorized": success,
                     }
+                elif AUTH_PROVIDER == "s2a":
+                    codex_data = perform_codex_authorization(page, email, password)
+                    if (
+                        codex_data
+                        and "code" in codex_data
+                        and "session_id" in codex_data
+                    ):
+                        from src.s2a.s2a_service import s2a_create_account_from_oauth
+
+                        s2a_result = s2a_create_account_from_oauth(
+                            code=codex_data["code"],
+                            session_id=codex_data["session_id"],
+                            name=email,
+                            expires_at=expires_at,
+                        )
+                        return {
+                            "success": bool(s2a_result),
+                            "token": token,
+                            "account_id": account_id,
+                            "expires_at": expires_at,
+                            "authorized": bool(s2a_result),
+                            "s2a_id": s2a_result.get("id") if s2a_result else None,
+                        }
+                    else:
+                        if attempt < ctx.max_retries - 1:
+                            log.warning("授权失败，准备重试...")
+                            continue
+                        return {
+                            "success": False,
+                            "token": token,
+                            "account_id": account_id,
+                            "expires_at": expires_at,
+                            "authorized": False,
+                        }
                 else:
                     codex_data = perform_codex_authorization(page, email, password)
                     if codex_data:
