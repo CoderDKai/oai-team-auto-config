@@ -29,12 +29,18 @@
     "password": "YourPassword@2025",
     "token": "eyJhbGciOiJSUzI1NiIs...(your access token)",
     "authorized": false,
-    "account_id": ""
+    "account_id": "",
+    "expires_at": 0,
+    "can_receive_verification_code": true
   },
   {
     "_comment": "格式3 (新格式-无Token): 只需邮箱和密码，程序会自动登录获取Token",
     "_comment2": "适用于没有 accessToken 的情况，程序启动时会自动登录",
+    "_comment3": "can_receive_verification_code: true=自动从邮箱获取验证码, false=等待用户手动输入",
+    "_comment4": "expires_at: Team订阅过期时间(Unix时间戳)，程序会自动从 /backend-api/me 获取并保存",
     "account": "team-owner2@example.com",
-    "password": "YourPassword@2025"
+    "password": "YourPassword@2025",
+    "expires_at": 0,
+    "can_receive_verification_code": false
   }
 ]

@@ -283,7 +283,11 @@ def s2a_generate_auth_url(
 
 
 def s2a_create_account_from_oauth(
-    code: str, session_id: str, name: str = "", proxy_id: Optional[int] = None
+    code: str,
+    session_id: str,
+    name: str = "",
+    proxy_id: Optional[int] = None,
+    expires_at: int = 0,
 ) -> Optional[Dict[str, Any]]:
     """一步完成：用授权码换取 token 并创建账号
 
@@ -292,6 +296,7 @@ def s2a_create_account_from_oauth(
         session_id: 会话 ID
         name: 账号名称 (可选)
         proxy_id: 代理 ID (可选)
+        expires_at: 订阅过期时间 (Unix时间戳，可选)
 
     Returns:
         dict: 账号数据 或 None
@@ -308,6 +313,8 @@ def s2a_create_account_from_oauth(
         payload["name"] = name
     if proxy_id is not None:
         payload["proxy_id"] = proxy_id
+    if expires_at > 0:
+        payload["expires_at"] = expires_at
 
     group_ids = get_s2a_group_ids()
     if group_ids:

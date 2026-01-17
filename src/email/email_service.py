@@ -27,6 +27,10 @@ from src.core.config import (
     GPTMAIL_PREFIX,
     GPTMAIL_DOMAINS,
     get_random_gptmail_domain,
+    DOMAINMAIL_API_BASE,
+    DOMAINMAIL_API_KEY,
+    DOMAINMAIL_DOMAINS,
+    get_random_domainmail_domain,
 )
 from src.core.logger import log
 
@@ -365,13 +369,12 @@ class GPTMailService:
         if not text:
             return None
 
-        # 尝试多种模式
         patterns = [
             r"代码为\s*(\d{6})",
             r"code is\s*(\d{6})",
             r"verification code[:\s]*(\d{6})",
             r"验证码[：:\s]*(\d{6})",
-            r"(\d{6})",  # 最后尝试直接匹配6位数字
+            r"\b(\d{6})\b",
         ]
 
         for pattern in patterns:
@@ -384,6 +387,154 @@ class GPTMailService:
 
 # 全局 GPTMail 服务实例
 gptmail_service = GPTMailService()
+
+
+class DomainMailService:
+    def __init__(self, api_base: str = None, api_key: str = None):
+        self.api_base = api_base or DOMAINMAIL_API_BASE
+        self.api_key = api_key or DOMAINMAIL_API_KEY
+        self.headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+    def create_mailbox(self, address: str) -> tuple[dict, str]:
+        url = f"{self.api_base}/mailboxes"
+        payload = {"address": address}
+
+        try:
+            log.info(f"DomainMail 创建邮箱: {address}", icon="email")
+            response = http_session.post(
+                url, headers=self.headers, json=payload, timeout=REQUEST_TIMEOUT
+            )
+            data = response.json()
+
+            if response.status_code == 201:
+                log.success(f"DomainMail 邮箱创建成功: {address}")
+                return data, None
+            else:
+                error = data.get("message", "Unknown error")
+                log.error(f"DomainMail 邮箱创建失败: {error}")
+                return None, error
+
+        except Exception as e:
+            log.error(f"DomainMail 邮箱创建异常: {e}")
+            return None, str(e)
+
+    def get_emails(
+        self, address: str, page: int = 1, limit: int = 20
+    ) -> tuple[list, str]:
+        url = f"{self.api_base}/mailboxes/{address}/emails"
+        params = {"page": page, "limit": limit}
+
+        try:
+            response = http_session.get(
+                url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT
+            )
+            data = response.json()
+
+            if response.status_code == 200:
+                emails = data.get("data", [])
+                return emails, None
+            else:
+                error = data.get("message", "Unknown error")
+                return [], error
+
+        except Exception as e:
+            log.warning(f"DomainMail 获取邮件列表异常: {e}")
+            return [], str(e)
+
+    def get_email_detail(self, email_id: str) -> tuple[dict, str]:
+        url = f"{self.api_base}/emails/{email_id}"
+
+        try:
+            response = http_session.get(
+                url, headers=self.headers, timeout=REQUEST_TIMEOUT
+            )
+            data = response.json()
+
+            if response.status_code == 200:
+                return data, None
+            else:
+                error = data.get("message", "Unknown error")
+                return {}, error
+
+        except Exception as e:
+            log.warning(f"DomainMail 获取邮件详情异常: {e}")
+            return {}, str(e)
+
+    def _extract_code(self, text: str) -> str:
+        if not text:
+            return None
+
+        patterns = [
+            r"代码为\s*(\d{6})",
+            r"code is\s*(\d{6})",
+            r"verification code[:\s]*(\d{6})",
+            r"验证码[：:\s]*(\d{6})",
+            r"\b(\d{6})\b",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return match.group(1)
+
+        return None
+
+    def get_verification_code(
+        self, address: str, max_retries: int = None, interval: int = None
+    ) -> tuple[str, str, str]:
+        log.info(f"DomainMail 等待验证码邮件: {address}", icon="email")
+
+        email_time_holder = [None]
+
+        def fetch_emails():
+            emails, error = self.get_emails(address, page=1, limit=10)
+            return emails if emails else None
+
+        def check_for_code(emails):
+            for email_item in emails:
+                email_id = email_item.get("id", "")
+                subject = email_item.get("subject", "")
+                snippet = email_item.get("snippet", "")
+                email_time_holder[0] = email_item.get("receivedAt", "")
+
+                code = self._extract_code(subject)
+                if code:
+                    return code
+
+                code = self._extract_code(snippet)
+                if code:
+                    return code
+
+                if email_id:
+                    detail, error = self.get_email_detail(email_id)
+                    if detail:
+                        text_body = detail.get("textBody", "")
+                        code = self._extract_code(text_body)
+                        if code:
+                            return code
+
+            return None
+
+        result = poll_with_retry(
+            fetch_func=fetch_emails,
+            check_func=check_for_code,
+            max_retries=max_retries,
+            interval=interval,
+            description="DomainMail 获取邮件",
+        )
+
+        if result.success:
+            log.success(f"DomainMail 验证码获取成功: {result.data}")
+            return result.data, None, email_time_holder[0]
+        else:
+            log.error(f"DomainMail 验证码获取失败 ({result.error})")
+            return None, "未能获取验证码", None
+
+
+domainmail_service = DomainMailService()
 
 
 # ==================== 原有 KYX 邮箱服务 ====================
@@ -492,7 +643,7 @@ def get_verification_code(
         patterns = [
             r"代码为\s*(\d{6})",
             r"code is\s*(\d{6})",
-            r"(\d{6})",
+            r"\b(\d{6})\b",
         ]
         for pattern in patterns:
             match = re.search(pattern, subject, re.IGNORECASE)
@@ -585,8 +736,17 @@ def unified_generate_email() -> str:
     Returns:
         str: 邮箱地址
     """
+    if EMAIL_PROVIDER == "domainmail":
+        random_str = "".join(
+            random.choices(string.ascii_lowercase + string.digits, k=8)
+        )
+        domain = get_random_domainmail_domain()
+        if domain:
+            email = f"{random_str}oaiteam@{domain}"
+            return email
+        log.warning("DomainMail 无可用域名，回退到 KYX")
+
     if EMAIL_PROVIDER == "gptmail":
-        # 生成随机前缀 + oaiteam 后缀，确保不重复
         random_str = "".join(
             random.choices(string.ascii_lowercase + string.digits, k=8)
         )
@@ -597,7 +757,6 @@ def unified_generate_email() -> str:
             return email
         log.warning(f"GPTMail 生成失败，回退到 KYX: {error}")
 
-    # 默认使用 KYX 系统
     return generate_random_email()
 
 
@@ -607,8 +766,28 @@ def unified_create_email() -> tuple[str, str]:
     Returns:
         tuple: (email, password)
     """
+    if EMAIL_PROVIDER == "domainmail":
+        from datetime import datetime
+
+        now = datetime.now()
+        mm = now.strftime("%m")
+        dd = now.strftime("%d")
+        random_str = "".join(
+            random.choices(string.ascii_lowercase + string.digits, k=6)
+        )
+        prefix = f"gpt-{mm}{dd}{random_str}"
+
+        domain = get_random_domainmail_domain()
+        if domain:
+            email = f"{prefix}@{domain}"
+            mailbox, error = domainmail_service.create_mailbox(email)
+            if mailbox:
+                return email, DEFAULT_PASSWORD
+            log.warning(f"DomainMail 创建失败: {error}")
+        else:
+            log.warning("DomainMail 无可用域名，回退到 KYX")
+
     if EMAIL_PROVIDER == "gptmail":
-        # 生成随机前缀 + oaiteam 后缀，确保不重复
         random_str = "".join(
             random.choices(string.ascii_lowercase + string.digits, k=8)
         )
@@ -616,11 +795,9 @@ def unified_create_email() -> tuple[str, str]:
         domain = get_random_gptmail_domain() or None
         email, error = gptmail_service.generate_email(prefix=prefix, domain=domain)
         if email:
-            # GPTMail 不需要密码，但为了接口一致性返回默认密码
             return email, DEFAULT_PASSWORD
         log.warning(f"GPTMail 生成失败，回退到 KYX: {error}")
 
-    # 默认使用 KYX 系统
     email = generate_random_email()
     success, msg = create_email_user(email, DEFAULT_PASSWORD)
     if success or "已存在" in msg:
@@ -641,10 +818,12 @@ def unified_get_verification_code(
     Returns:
         tuple: (code, error, email_time) - 验证码、错误信息、邮件时间
     """
+    if EMAIL_PROVIDER == "domainmail":
+        return domainmail_service.get_verification_code(email, max_retries, interval)
+
     if EMAIL_PROVIDER == "gptmail":
         return gptmail_service.get_verification_code(email, max_retries, interval)
 
-    # 默认使用 KYX 系统
     return get_verification_code(email, max_retries, interval)
 
 

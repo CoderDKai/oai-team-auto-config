@@ -37,7 +37,7 @@ from src.team.team_service import (
 )
 from src.crs.crs_service import crs_add_account, crs_sync_team_owners, crs_verify_token
 from src.cpa.cpa_service import cpa_verify_connection
-from src.s2a.s2a_service import s2a_verify_connection
+from src.s2a.s2a_service import s2a_verify_connection, s2a_create_account_from_oauth
 from src.automation.browser_automation import (
     register_and_authorize,
     login_and_authorize_with_otp,
@@ -431,21 +431,60 @@ def process_accounts(accounts: list, team_name: str) -> list:
                 update_account_status(_tracker, team_name, email, "registered")
                 save_team_tracker(_tracker)
 
-                # CPA 模式: codex_data 为 None，授权成功后直接标记完成
-                # CRS 模式: 需要 codex_data，手动添加到 CRS
-                if AUTH_PROVIDER in ("cpa", "s2a"):
-                    # CPA/S2A 模式: 授权成功即完成 (后台自动处理账号)
-                    # codex_data 为 None 表示授权成功
+                if AUTH_PROVIDER == "cpa":
                     update_account_status(_tracker, team_name, email, "authorized")
                     save_team_tracker(_tracker)
 
                     result["status"] = "success"
-                    result["crs_id"] = f"{AUTH_PROVIDER.upper()}-AUTO"  # 标记为自动处理
+                    result["crs_id"] = "CPA-AUTO"
 
                     update_account_status(_tracker, team_name, email, "completed")
                     save_team_tracker(_tracker)
 
-                    log.success(f"{AUTH_PROVIDER.upper()} 账号处理完成: {email}")
+                    log.success(f"CPA 账号处理完成: {email}")
+                elif AUTH_PROVIDER == "s2a":
+                    if (
+                        codex_data
+                        and "code" in codex_data
+                        and "session_id" in codex_data
+                    ):
+                        update_account_status(_tracker, team_name, email, "authorized")
+                        save_team_tracker(_tracker)
+
+                        log.step("添加到 S2A...")
+                        team_config = _get_team_by_name(team_name)
+                        expires_at = (
+                            team_config.get("expires_at", 0) if team_config else 0
+                        )
+
+                        s2a_result = s2a_create_account_from_oauth(
+                            code=codex_data["code"],
+                            session_id=codex_data["session_id"],
+                            name=email,
+                            expires_at=expires_at,
+                        )
+
+                        if s2a_result:
+                            s2a_id = s2a_result.get("id", "")
+                            result["status"] = "success"
+                            result["crs_id"] = f"S2A-{s2a_id}"
+
+                            update_account_status(
+                                _tracker, team_name, email, "completed"
+                            )
+                            save_team_tracker(_tracker)
+
+                            log.success(f"S2A 账号处理完成: {email}")
+                        else:
+                            log.warning("S2A 入库失败，但注册和授权成功")
+                            result["status"] = "partial"
+                            update_account_status(_tracker, team_name, email, "partial")
+                            save_team_tracker(_tracker)
+                    else:
+                        log.warning("S2A 授权失败: 缺少 code 或 session_id")
+                        result["status"] = "auth_failed"
+                        update_account_status(_tracker, team_name, email, "auth_failed")
+                        save_team_tracker(_tracker)
                 else:
                     # CRS 模式: 原有逻辑
                     if codex_data:
@@ -726,7 +765,10 @@ def process_team_with_login(team: dict, team_index: int, total: int):
     log.info("登录并授权 Owner...", icon="auth")
     proxy = get_next_proxy()
     result = login_and_authorize_team_owner(
-        team["owner_email"], team["owner_password"], proxy
+        team["owner_email"],
+        team["owner_password"],
+        team.get("can_receive_verification_code", True),
+        proxy,
     )
 
     owner_result = None  # Owner 的处理结果
@@ -735,10 +777,11 @@ def process_team_with_login(team: dict, team_index: int, total: int):
         team["auth_token"] = result["token"]
     if result.get("account_id"):
         team["account_id"] = result["account_id"]
+    if result.get("expires_at"):
+        team["expires_at"] = result["expires_at"]
     if result.get("authorized"):
         team["authorized"] = True
 
-    # 立即保存
     save_team_json()
 
     if not result.get("token"):

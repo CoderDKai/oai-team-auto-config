@@ -156,8 +156,11 @@ def _parse_team_config(t: dict, index: int) -> dict:
             "auth_token": token,
             "owner_email": email,
             "owner_password": t.get("password", ""),
-            "needs_login": not token,  # 无 token 需要登录
-            "authorized": authorized,  # 是否已授权
+            "needs_login": not token,
+            "authorized": authorized,
+            "can_receive_verification_code": t.get(
+                "can_receive_verification_code", True
+            ),
             "format": "new",
             "raw": t,
         }
@@ -222,7 +225,7 @@ def save_team_json():
 
 
 # 邮箱系统选择
-EMAIL_PROVIDER = _cfg.get("email_provider", "kyx")  # "kyx" 或 "gptmail"
+EMAIL_PROVIDER = _cfg.get("email_provider", "kyx")  # "kyx" 或 "gptmail" 或 "domainmail"
 
 # 原有邮箱系统 (KYX)
 _email = _cfg.get("email", {})
@@ -242,10 +245,24 @@ GPTMAIL_API_KEY = _gptmail.get("api_key", "gpt-test")
 GPTMAIL_PREFIX = _gptmail.get("prefix", "")
 GPTMAIL_DOMAINS = _gptmail.get("domains", [])
 
+# Domain Mail 邮箱配置 (Cloudflare Email Worker)
+_domainmail = _cfg.get("domainmail", {})
+DOMAINMAIL_API_BASE = _domainmail.get("api_base", "")
+DOMAINMAIL_API_KEY = _domainmail.get("api_key", "")
+DOMAINMAIL_DOMAINS = _domainmail.get("domains", [])
+
 
 def get_random_gptmail_domain() -> str:
     """随机获取一个 GPTMail 可用域名 (排除黑名单)"""
     available = [d for d in GPTMAIL_DOMAINS if d not in _domain_blacklist]
+    if available:
+        return random.choice(available)
+    return ""
+
+
+def get_random_domainmail_domain() -> str:
+    """随机获取一个 Domain Mail 可用域名 (排除黑名单)"""
+    available = [d for d in DOMAINMAIL_DOMAINS if d not in _domain_blacklist]
     if available:
         return random.choice(available)
     return ""

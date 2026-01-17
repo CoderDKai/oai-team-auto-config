@@ -33,6 +33,7 @@ from src.cpa.cpa_service import (
     cpa_poll_auth_status,
     is_cpa_callback_url,
 )
+from src.s2a.s2a_service import s2a_generate_auth_url
 from src.core.logger import log
 
 
@@ -916,9 +917,9 @@ def register_openai_account(page, email: str, password: str) -> bool:
                 except Exception:
                     pass
 
-                # 检查密码框是否已有内容（避免重复输入）
+                log.step("等待密码输入框...")
                 password_input = wait_for_element(
-                    page, 'css:input[type="password"]', timeout=5
+                    page, 'css:input[type="password"]', timeout=15
                 )
                 if not password_input:
                     log.error("无法找到密码输入框")
@@ -1295,8 +1296,17 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
     """
     log.info(f"开始 Codex 授权: {email}", icon="code")
 
-    # 生成授权 URL
-    auth_url, session_id = crs_generate_auth_url()
+    # 根据 AUTH_PROVIDER 配置选择授权服务
+    if AUTH_PROVIDER == "s2a":
+        log.info("授权服务: S2A (Sub2API)")
+        auth_url, session_id = s2a_generate_auth_url()
+    elif AUTH_PROVIDER == "cpa":
+        log.info("授权服务: CPA")
+        auth_url, session_id = cpa_generate_auth_url()
+    else:
+        log.info("授权服务: CRS")
+        auth_url, session_id = crs_generate_auth_url()
+
     if not auth_url or not session_id:
         log.error("无法获取授权 URL")
         return None
@@ -1390,10 +1400,9 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
                 page, 'css:input[type="password"]', timeout=10
             )
             if not password_input:
-                # 可能是错误页面
                 if check_and_handle_error_page(page):
                     password_input = wait_for_element(
-                        page, 'css:input[type="password"]', timeout=5
+                        page, 'css:input[type="password"]', timeout=15
                     )
             if not password_input:
                 password_input = wait_for_element(
@@ -1463,8 +1472,54 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
 
     log_current_url(page, "密码步骤完成后")
 
+    current_url = page.url
+    if "/email-verification" in current_url:
+        log.step("等待验证码邮件...")
+        verification_code, error, email_time = unified_get_verification_code(email)
+
+        if not verification_code:
+            log.warning(f"自动获取验证码失败: {error}")
+            verification_code = input("⚠️ 请手动输入验证码: ").strip()
+            if not verification_code:
+                log.error("未输入验证码")
+                return None
+
+        log.step(f"输入验证码: {verification_code}")
+        code_input = wait_for_element(page, 'css:input[name="otp"]', timeout=10)
+        if not code_input:
+            code_input = wait_for_element(page, 'css:input[type="text"]', timeout=5)
+        if not code_input:
+            code_input = wait_for_element(
+                page, 'css:input[autocomplete="one-time-code"]', timeout=5
+            )
+
+        if code_input:
+            try:
+                code_input.clear()
+            except Exception:
+                pass
+            type_slowly(
+                page,
+                'css:input[name="otp"], input[type="text"], input[autocomplete="one-time-code"]',
+                verification_code,
+                base_delay=0.08,
+            )
+
+            log.step("点击继续...")
+            continue_btn = wait_for_element(
+                page, 'css:button[type="submit"]', timeout=5
+            )
+            if continue_btn:
+                old_url = page.url
+                continue_btn.click()
+                wait_for_url_change(page, old_url, timeout=8)
+                log_url_change(page, old_url, "输入验证码后点击继续")
+        else:
+            log.error("未找到验证码输入框")
+            return None
+
     # 等待授权回调
-    max_wait = 45  # 减少等待时间
+    max_wait = 45
     start_time = time.time()
     code = None
     progress_shown = False
@@ -1475,12 +1530,10 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
         try:
             current_url = page.url
 
-            # 记录URL变化
             if current_url != last_url_in_loop:
                 log_current_url(page, "等待回调中")
                 last_url_in_loop = current_url
 
-            # 检查是否到达回调页面
             if "localhost:1455/auth/callback" in current_url and "code=" in current_url:
                 if progress_shown:
                     log.progress_clear()
@@ -1491,7 +1544,8 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
                     log.success("提取授权码成功")
                     break
 
-            # 尝试点击授权按钮
+            _check_and_select_team_workspace_dialog(page)
+
             try:
                 buttons = page.eles('css:button[type="submit"]')
                 for btn in buttons:
@@ -1514,7 +1568,7 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
                                 progress_shown = False
                             log.step(f"点击按钮: {btn.text}")
                             btn.click()
-                            time.sleep(1.5)  # 减少等待
+                            time.sleep(1.5)
                             break
             except Exception:
                 pass
@@ -1522,7 +1576,7 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
             elapsed = int(time.time() - start_time)
             log.progress_inline(f"[等待中... {elapsed}s]")
             progress_shown = True
-            time.sleep(1.5)  # 减少轮询间隔
+            time.sleep(1.5)
 
         except Exception as e:
             if progress_shown:
@@ -1546,9 +1600,14 @@ def perform_codex_authorization(page, email: str, password: str) -> dict:
         log.error("无法获取授权码")
         return None
 
-    # 交换 tokens
     log.step("交换 tokens...")
-    codex_data = crs_exchange_code(code, session_id)
+    if AUTH_PROVIDER == "crs":
+        codex_data = crs_exchange_code(code, session_id)
+    elif AUTH_PROVIDER == "s2a":
+        codex_data = {"code": code, "session_id": session_id}
+    else:
+        log.error(f"不支持的授权服务: {AUTH_PROVIDER}")
+        return None
 
     if codex_data:
         log.success("Codex 授权成功")
@@ -1570,8 +1629,13 @@ def perform_codex_authorization_with_otp(page, email: str) -> dict:
     """
     log.info("开始 Codex 授权 (OTP 登录)...", icon="auth")
 
-    # 生成授权 URL
-    auth_url, session_id = crs_generate_auth_url()
+    if AUTH_PROVIDER == "s2a":
+        auth_url, session_id = s2a_generate_auth_url()
+    elif AUTH_PROVIDER == "cpa":
+        auth_url, session_id = cpa_generate_auth_url()
+    else:
+        auth_url, session_id = crs_generate_auth_url()
+
     if not auth_url or not session_id:
         log.error("无法获取授权 URL")
         return None
@@ -1855,9 +1919,14 @@ def perform_codex_authorization_with_otp(page, email: str) -> dict:
         log.error("无法获取授权码")
         return None
 
-    # 交换 tokens
     log.step("交换 tokens...")
-    codex_data = crs_exchange_code(code, session_id)
+    if AUTH_PROVIDER == "crs":
+        codex_data = crs_exchange_code(code, session_id)
+    elif AUTH_PROVIDER == "s2a":
+        codex_data = {"code": code, "session_id": session_id}
+    else:
+        log.error(f"不支持的授权服务: {AUTH_PROVIDER}")
+        return None
 
     if codex_data:
         log.success("Codex 授权成功 (OTP)")
@@ -2460,7 +2529,9 @@ def perform_cpa_authorization_with_otp(page, email: str) -> bool:
 # ==================== 格式3专用: 登录获取 Session ====================
 
 
-def login_and_get_session(page, email: str, password: str) -> dict:
+def login_and_get_session(
+    page, email: str, password: str, can_receive_verification_code: bool = True
+) -> dict:
     """登录 ChatGPT 并获取 accessToken 和 account_id (格式3专用)
 
     用于 team.json 格式3 (只有邮箱和密码，没有 token) 的 Team Owner
@@ -2563,7 +2634,7 @@ def login_and_get_session(page, email: str, password: str) -> dict:
             # 步骤2: 输入密码
             if "/password" in current_url:
                 password_input = wait_for_element(
-                    page, 'css:input[type="password"]', timeout=5
+                    page, 'css:input[type="password"]', timeout=15
                 )
                 if password_input:
                     # 检查是否已输入密码
@@ -2598,6 +2669,61 @@ def login_and_get_session(page, email: str, password: str) -> dict:
                         wait_for_url_change(page, old_url, timeout=10)
                     continue
 
+            if "/email-verification" in current_url:
+                log_current_url(page, "邮箱验证码页面")
+
+                if can_receive_verification_code:
+                    log.step("等待验证码邮件...")
+                    verification_code, error, email_time = (
+                        unified_get_verification_code(email)
+                    )
+
+                    if not verification_code:
+                        log.warning("自动获取验证码失败，等待手动输入...")
+                        verification_code = input("   ⚠️ 请手动输入验证码: ").strip()
+                else:
+                    log.info("等待手动输入验证码...")
+                    verification_code = input("   ⚠️ 请输入验证码: ").strip()
+
+                if not verification_code:
+                    log.error("未输入验证码")
+                    return None
+
+                code_input = wait_for_element(
+                    page, 'css:input[name="code"]', timeout=10
+                )
+                if not code_input:
+                    code_input = wait_for_element(
+                        page, 'css:input[name="otp"]', timeout=5
+                    )
+
+                if code_input:
+                    log.step(f"输入验证码: {verification_code}")
+                    try:
+                        code_input.clear()
+                    except Exception:
+                        pass
+                    type_slowly(
+                        page,
+                        'css:input[name="code"], input[name="otp"]',
+                        verification_code,
+                        base_delay=0.08,
+                    )
+                    time.sleep(0.5)
+
+                    log.step("点击继续...")
+                    continue_btn = wait_for_element(
+                        page, 'css:button[type="submit"]', timeout=10
+                    )
+                    if continue_btn:
+                        old_url = page.url
+                        continue_btn.click()
+                        wait_for_url_change(page, old_url, timeout=10)
+                    continue
+                else:
+                    log.error("无法找到验证码输入框")
+                    return None
+
             # 处理错误
             if check_and_handle_error(page):
                 time.sleep(0.5)
@@ -2627,6 +2753,58 @@ def login_and_get_session(page, email: str, password: str) -> dict:
         return None
 
 
+def _check_and_select_team_workspace_dialog(page) -> bool:
+    """检查并选择团队工作空间弹框
+
+    处理登录后出现的 "Select a workspace" 弹框，选择第一个团队工作空间
+
+    Returns:
+        bool: 是否处理了团队选择弹框
+    """
+    try:
+        # 检查是否有 "Select a workspace" 弹框
+        # 根据用户提供的HTML，弹框的特征：role="dialog" 且包含 "Select a workspace" 文本
+        dialog = page.ele('css:div[role="dialog"]', timeout=2)
+        if not dialog:
+            return False
+
+        # 检查弹框中是否包含 "Select a workspace" 或 "选择工作空间"
+        workspace_header = dialog.ele("text:Select a workspace", timeout=1)
+        if not workspace_header:
+            workspace_header = dialog.ele("text:选择工作空间", timeout=1)
+
+        if not workspace_header:
+            return False
+
+        log.info("检测到团队工作空间选择弹框")
+
+        # 查找第一个团队选项（不是 "Personal account"）
+        # 根据HTML结构，团队选项是 button[role="radio"]
+        radio_buttons = dialog.eles('css:button[role="radio"]')
+
+        team_button = None
+        for btn in radio_buttons:
+            btn_text = btn.text.lower()
+            # 跳过 "Personal account" 选项
+            if "personal account" not in btn_text and "个人账号" not in btn_text:
+                team_button = btn
+                break
+
+        if team_button:
+            log.step(f"选择团队工作空间: {team_button.text.split()[0]}")
+            team_button.click()
+            time.sleep(1.5)
+            log.success("已选择团队工作空间")
+            return True
+        else:
+            log.warning("未找到团队工作空间选项")
+            return False
+
+    except Exception as e:
+        log.warning(f"检查团队选择弹框异常: {e}")
+        return False
+
+
 def _check_and_select_workspace(page) -> bool:
     """检查并选择工作空间
 
@@ -2636,6 +2814,10 @@ def _check_and_select_workspace(page) -> bool:
         bool: 是否处理了工作空间选择
     """
     try:
+        # 首先检查是否有团队选择弹框
+        if _check_and_select_team_workspace_dialog(page):
+            time.sleep(2)  # 等待弹框关闭
+
         # 检查是否有"启动工作空间"文字
         workspace_text = page.ele("text:启动工作空间", timeout=2)
         if not workspace_text:
@@ -2701,7 +2883,12 @@ def _fetch_session_data(page) -> dict:
     try:
         import json as json_module
 
-        # 直接访问 session API 页面
+        page.get("https://chatgpt.com")
+        time.sleep(1)
+
+        _check_and_select_team_workspace_dialog(page)
+        time.sleep(1)
+
         log.step("获取 Session 数据...")
         page.get("https://chatgpt.com/api/auth/session")
         time.sleep(1)
@@ -2729,7 +2916,47 @@ def _fetch_session_data(page) -> dict:
                 log.info(f"  account_id: {account_id[:20]}...")
             else:
                 log.warning("  account_id: 未获取到")
-            return {"token": token, "account_id": account_id or ""}
+
+            expires_at = 0
+            try:
+                log.step("获取 Team 订阅信息...")
+                page.get("https://chatgpt.com/backend-api/me")
+                time.sleep(1)
+
+                me_body = page.ele("tag:body", timeout=5)
+                if me_body:
+                    me_text = me_body.text
+                    if me_text and me_text != "{}":
+                        me_data = json_module.loads(me_text)
+                        accounts = me_data.get("accounts", {})
+
+                        if account_id and account_id in accounts:
+                            account_info = accounts[account_id]
+                            entitlement = account_info.get("entitlement", {})
+                            expires_at_str = entitlement.get("expires_at")
+
+                            if expires_at_str:
+                                from datetime import datetime
+
+                                expires_dt = datetime.fromisoformat(
+                                    expires_at_str.replace("Z", "+00:00")
+                                )
+                                expires_at = int(expires_dt.timestamp())
+                                log.success(
+                                    f"  expires_at: {expires_at} ({expires_at_str})"
+                                )
+                            else:
+                                log.warning("  expires_at: 未获取到")
+                        else:
+                            log.warning("  未找到当前账号的订阅信息")
+            except Exception as e:
+                log.warning(f"获取 Team 订阅信息失败: {e}")
+
+            return {
+                "token": token,
+                "account_id": account_id or "",
+                "expires_at": expires_at,
+            }
         else:
             log.error("Session 中没有 token")
             return None
@@ -2740,7 +2967,10 @@ def _fetch_session_data(page) -> dict:
 
 
 def login_and_authorize_team_owner(
-    email: str, password: str, proxy: dict = None
+    email: str,
+    password: str,
+    can_receive_verification_code: bool = True,
+    proxy: dict = None,
 ) -> dict:
     """格式3专用: 登录获取 token/account_id 并同时进行授权
 
@@ -2770,7 +3000,9 @@ def login_and_authorize_team_owner(
                         log.info(f"使用代理: {proxy.get('host')}:{proxy.get('port')}")
 
                 # 步骤1: 登录获取 Session
-                session_data = login_and_get_session(page, email, password)
+                session_data = login_and_get_session(
+                    page, email, password, can_receive_verification_code
+                )
                 if not session_data:
                     if attempt < ctx.max_retries - 1:
                         log.warning("登录失败，准备重试...")
@@ -2779,14 +3011,15 @@ def login_and_authorize_team_owner(
 
                 token = session_data["token"]
                 account_id = session_data["account_id"]
+                expires_at = session_data.get("expires_at", 0)
 
-                # 步骤2: 进行授权
                 if AUTH_PROVIDER == "cpa":
                     success = perform_cpa_authorization(page, email, password)
                     return {
                         "success": success,
                         "token": token,
                         "account_id": account_id,
+                        "expires_at": expires_at,
                         "authorized": success,
                     }
                 else:
@@ -2799,6 +3032,7 @@ def login_and_authorize_team_owner(
                             "success": bool(crs_result),
                             "token": token,
                             "account_id": account_id,
+                            "expires_at": expires_at,
                             "authorized": bool(crs_result),
                             "crs_id": crs_result.get("id") if crs_result else None,
                         }
@@ -2810,6 +3044,7 @@ def login_and_authorize_team_owner(
                             "success": False,
                             "token": token,
                             "account_id": account_id,
+                            "expires_at": expires_at,
                             "authorized": False,
                         }
 
