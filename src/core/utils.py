@@ -7,11 +7,17 @@ import json
 import time
 from datetime import datetime
 
-from config import CSV_FILE, TEAM_TRACKER_FILE
-from logger import log
+from src.core.config import CSV_FILE, TEAM_TRACKER_FILE
+from src.core.logger import log
 
 
-def save_to_csv(email: str, password: str, team_name: str = "", status: str = "success", crs_id: str = ""):
+def save_to_csv(
+    email: str,
+    password: str,
+    team_name: str = "",
+    status: str = "success",
+    crs_id: str = "",
+):
     """保存账号信息到 CSV 文件
 
     Args:
@@ -23,20 +29,24 @@ def save_to_csv(email: str, password: str, team_name: str = "", status: str = "s
     """
     file_exists = os.path.exists(CSV_FILE)
 
-    with open(CSV_FILE, 'a', newline='', encoding='utf-8') as f:
+    with open(CSV_FILE, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
 
         if not file_exists:
-            writer.writerow(['email', 'password', 'team', 'status', 'crs_id', 'timestamp'])
+            writer.writerow(
+                ["email", "password", "team", "status", "crs_id", "timestamp"]
+            )
 
-        writer.writerow([
-            email,
-            password,
-            team_name,
-            status,
-            crs_id,
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        ])
+        writer.writerow(
+            [
+                email,
+                password,
+                team_name,
+                status,
+                crs_id,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            ]
+        )
 
     log.info(f"保存到 {CSV_FILE}", icon="save")
 
@@ -49,7 +59,7 @@ def load_team_tracker() -> dict:
     """
     if os.path.exists(TEAM_TRACKER_FILE):
         try:
-            with open(TEAM_TRACKER_FILE, 'r', encoding='utf-8') as f:
+            with open(TEAM_TRACKER_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             log.warning(f"加载追踪记录失败: {e}")
@@ -59,16 +69,18 @@ def load_team_tracker() -> dict:
 
 def save_team_tracker(tracker: dict):
     """保存 Team 追踪记录"""
-    tracker["last_updated"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    tracker["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     try:
-        with open(TEAM_TRACKER_FILE, 'w', encoding='utf-8') as f:
+        with open(TEAM_TRACKER_FILE, "w", encoding="utf-8") as f:
             json.dump(tracker, f, ensure_ascii=False, indent=2)
     except Exception as e:
         log.warning(f"保存追踪记录失败: {e}")
 
 
-def add_account_to_tracker(tracker: dict, team_name: str, email: str, status: str = "invited"):
+def add_account_to_tracker(
+    tracker: dict, team_name: str, email: str, status: str = "invited"
+):
     """添加账号到追踪记录
 
     Args:
@@ -84,16 +96,18 @@ def add_account_to_tracker(tracker: dict, team_name: str, email: str, status: st
     for account in tracker["teams"][team_name]:
         if account["email"] == email:
             account["status"] = status
-            account["updated_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            account["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             return
 
     # 添加新记录
-    tracker["teams"][team_name].append({
-        "email": email,
-        "status": status,
-        "created_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        "updated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    })
+    tracker["teams"][team_name].append(
+        {
+            "email": email,
+            "status": status,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    )
 
 
 def update_account_status(tracker: dict, team_name: str, email: str, status: str):
@@ -102,26 +116,25 @@ def update_account_status(tracker: dict, team_name: str, email: str, status: str
         for account in tracker["teams"][team_name]:
             if account["email"] == email:
                 account["status"] = status
-                account["updated_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                account["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 return
 
 
 def remove_account_from_tracker(tracker: dict, team_name: str, email: str) -> bool:
     """从 tracker 中移除账号
-    
+
     Args:
         tracker: 追踪记录
         team_name: Team 名称
         email: 邮箱地址
-        
+
     Returns:
         bool: 是否成功移除
     """
     if team_name in tracker["teams"]:
         original_len = len(tracker["teams"][team_name])
         tracker["teams"][team_name] = [
-            acc for acc in tracker["teams"][team_name] 
-            if acc["email"] != email
+            acc for acc in tracker["teams"][team_name] if acc["email"] != email
         ]
         return len(tracker["teams"][team_name]) < original_len
     return False
@@ -150,12 +163,14 @@ def get_incomplete_accounts(tracker: dict, team_name: str) -> list:
             status = account.get("status", "")
             # 只要不是 completed 都算未完成，需要继续处理
             if status != "completed":
-                incomplete.append({
-                    "email": account["email"],
-                    "status": status,
-                    "password": account.get("password", ""),
-                    "role": account.get("role", "member")  # 包含角色信息
-                })
+                incomplete.append(
+                    {
+                        "email": account["email"],
+                        "status": status,
+                        "password": account.get("password", ""),
+                        "role": account.get("role", "member"),  # 包含角色信息
+                    }
+                )
     return incomplete
 
 
@@ -173,7 +188,9 @@ def get_all_incomplete_accounts(tracker: dict) -> dict:
     return result
 
 
-def add_account_with_password(tracker: dict, team_name: str, email: str, password: str, status: str = "invited"):
+def add_account_with_password(
+    tracker: dict, team_name: str, email: str, password: str, status: str = "invited"
+):
     """添加账号到追踪记录 (带密码)"""
     if team_name not in tracker["teams"]:
         tracker["teams"][team_name] = []
@@ -183,18 +200,20 @@ def add_account_with_password(tracker: dict, team_name: str, email: str, passwor
         if account["email"] == email:
             account["status"] = status
             account["password"] = password
-            account["updated_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            account["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             return
 
     # 添加新记录
-    tracker["teams"][team_name].append({
-        "email": email,
-        "password": password,
-        "status": status,
-        "role": "member",  # 角色: owner 或 member
-        "created_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        "updated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    })
+    tracker["teams"][team_name].append(
+        {
+            "email": email,
+            "password": password,
+            "status": status,
+            "role": "member",  # 角色: owner 或 member
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    )
 
 
 def print_summary(results: list):
@@ -230,7 +249,9 @@ def print_summary(results: list):
 
     log.info("按 Team 统计:")
     for team_name, data in teams.items():
-        log.info(f"{team_name}: 成功 {data['success']}, 失败 {data['failed']}", icon="team")
+        log.info(
+            f"{team_name}: 成功 {data['success']}, 失败 {data['failed']}", icon="team"
+        )
         for acc in data["accounts"]:
             if acc.get("status") == "success":
                 log.success(f"{acc.get('email', 'Unknown')}")
@@ -266,6 +287,8 @@ class Timer:
             log.info(f"{self.name} 开始", icon="time")
 
     def stop(self):
+        if self.start_time is None:
+            return 0.0
         self.end_time = time.time()
         duration = self.end_time - self.start_time
         if self.name:
@@ -292,7 +315,7 @@ def add_team_owners_to_tracker(tracker: dict, password: str) -> int:
     Returns:
         int: 添加的数量
     """
-    from config import INCLUDE_TEAM_OWNERS, TEAMS
+    from src.core.config import INCLUDE_TEAM_OWNERS, TEAMS
 
     if not INCLUDE_TEAM_OWNERS:
         return 0
@@ -346,15 +369,19 @@ def add_team_owners_to_tracker(tracker: dict, password: str) -> int:
             else:
                 status = "team_owner"  # 旧格式，使用 OTP 登录授权
 
-            tracker["teams"][team_name].append({
-                "email": email,
-                "password": owner_password,
-                "status": status,
-                "role": "owner",
-                "created_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                "updated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            })
-            log.info(f"Team Owner 添加到 tracker: {email} -> {team_name} (格式: {team_format}, 状态: {status})")
+            tracker["teams"][team_name].append(
+                {
+                    "email": email,
+                    "password": owner_password,
+                    "status": status,
+                    "role": "owner",
+                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
+            log.info(
+                f"Team Owner 添加到 tracker: {email} -> {team_name} (格式: {team_format}, 状态: {status})"
+            )
             added_count += 1
 
     if added_count > 0:

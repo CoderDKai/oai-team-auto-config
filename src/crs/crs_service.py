@@ -6,7 +6,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from urllib.parse import urlparse, parse_qs
 
-from config import (
+from src.core.config import (
     CRS_API_BASE,
     CRS_ADMIN_TOKEN,
     REQUEST_TIMEOUT,
@@ -15,7 +15,7 @@ from config import (
     PROXY_ENABLED,
     get_proxy_dict,
 )
-from logger import log
+from src.core.logger import log
 
 
 def create_session_with_retry():
@@ -25,7 +25,7 @@ def create_session_with_retry():
         total=5,
         backoff_factor=1,
         status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "POST", "OPTIONS"]
+        allowed_methods=["HEAD", "GET", "POST", "OPTIONS"],
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("https://", adapter)
@@ -51,7 +51,7 @@ def build_crs_headers() -> dict:
         "content-type": "application/json",
         "origin": CRS_API_BASE,
         "referer": f"{CRS_API_BASE}/admin-next/accounts",
-        "user-agent": USER_AGENT
+        "user-agent": USER_AGENT,
     }
 
 
@@ -79,7 +79,7 @@ def crs_verify_token() -> tuple[bool, str]:
         response = http_session.get(
             f"{CRS_API_BASE}/admin/openai-accounts",
             headers=headers,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -122,7 +122,7 @@ def crs_generate_auth_url() -> tuple[str, str]:
             f"{CRS_API_BASE}/admin/openai-accounts/generate-auth-url",
             headers=headers,
             json={},
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -159,7 +159,7 @@ def crs_exchange_code(code: str, session_id: str) -> dict:
             f"{CRS_API_BASE}/admin/openai-accounts/exchange-code",
             headers=headers,
             json=payload,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -196,10 +196,10 @@ def crs_add_account(email: str, codex_data: dict) -> dict:
             "idToken": codex_data.get("tokens", {}).get("idToken"),
             "accessToken": codex_data.get("tokens", {}).get("accessToken"),
             "refreshToken": codex_data.get("tokens", {}).get("refreshToken"),
-            "expires_in": codex_data.get("tokens", {}).get("expires_in", 864000)
+            "expires_in": codex_data.get("tokens", {}).get("expires_in", 864000),
         },
         "accountInfo": codex_data.get("accountInfo", {}),
-        "priority": 50
+        "priority": 50,
     }
 
     try:
@@ -207,7 +207,7 @@ def crs_add_account(email: str, codex_data: dict) -> dict:
             f"{CRS_API_BASE}/admin/openai-accounts",
             headers=headers,
             json=payload,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -259,7 +259,7 @@ def crs_get_accounts() -> list:
         response = http_session.get(
             f"{CRS_API_BASE}/admin/openai-accounts",
             headers=headers,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -322,7 +322,7 @@ def crs_add_team_owner(team_data: dict) -> dict:
             "accessToken": access_token,
             "refreshToken": "",  # team.json 中没有 refreshToken
             "idToken": "",
-            "expires_in": 864000
+            "expires_in": 864000,
         },
         "accountInfo": {
             "user_id": team_data.get("user", {}).get("id", ""),
@@ -330,7 +330,7 @@ def crs_add_team_owner(team_data: dict) -> dict:
             "plan_type": team_data.get("account", {}).get("planType", "team"),
             "organization_id": team_data.get("account", {}).get("organizationId", ""),
         },
-        "priority": 50
+        "priority": 50,
     }
 
     try:
@@ -338,7 +338,7 @@ def crs_add_team_owner(team_data: dict) -> dict:
             f"{CRS_API_BASE}/admin/openai-accounts",
             headers=headers,
             json=payload,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:

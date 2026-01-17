@@ -5,9 +5,11 @@ build/
 dist/
 wheels/
 *.egg-info
+*.egg-info/
 
 # Virtual environments
 .venv
+venv/
 
 # Sensitive configuration (use config.toml.example as template)
 config.toml

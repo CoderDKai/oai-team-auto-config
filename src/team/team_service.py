@@ -5,7 +5,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from config import (
+from src.core.config import (
     TEAMS,
     ACCOUNTS_PER_TEAM,
     REQUEST_TIMEOUT,
@@ -13,9 +13,9 @@ from config import (
     BROWSER_HEADLESS,
     PROXY_ENABLED,
     save_team_json,
-    get_proxy_dict
+    get_proxy_dict,
 )
-from logger import log
+from src.core.logger import log
 
 
 def create_session_with_retry():
@@ -25,7 +25,7 @@ def create_session_with_retry():
         total=5,
         backoff_factor=1,
         status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "POST", "OPTIONS"]
+        allowed_methods=["HEAD", "GET", "POST", "OPTIONS"],
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("https://", adapter)
@@ -75,7 +75,7 @@ def fetch_account_id(team: dict, silent: bool = False) -> str:
         response = http_session.get(
             "https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27",
             headers=headers,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -122,7 +122,13 @@ def preload_all_account_ids() -> tuple[int, int]:
     Returns:
         tuple: (success_count, fail_count)
     """
-    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+    from rich.progress import (
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        BarColumn,
+        TaskProgressColumn,
+    )
 
     success_count = 0
     fail_count = 0
@@ -166,7 +172,7 @@ def preload_all_account_ids() -> tuple[int, int]:
                     need_save = True
             else:
                 fail_count += 1
-                failed_teams.append(team['name'])
+                failed_teams.append(team["name"])
                 progress.update(task, advance=1, status="[red]✗")
 
     # 输出失败的 team
@@ -209,10 +215,10 @@ def build_invite_headers(team: dict) -> dict:
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": '"Windows"',
     }
-    
+
     if account_id:
         headers["chatgpt-account-id"] = account_id
-    
+
     return headers
 
 
@@ -230,12 +236,16 @@ def invite_single_email(email: str, team: dict) -> tuple[bool, str]:
     payload = {
         "email_addresses": [email],
         "role": "standard-user",
-        "resend_emails": True
+        "resend_emails": True,
     }
-    invite_url = f"https://chatgpt.com/backend-api/accounts/{team['account_id']}/invites"
+    invite_url = (
+        f"https://chatgpt.com/backend-api/accounts/{team['account_id']}/invites"
+    )
 
     try:
-        response = http_session.post(invite_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+        response = http_session.post(
+            invite_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+        )
 
         if response.status_code == 200:
             result = response.json()
@@ -262,23 +272,27 @@ def batch_invite_to_team(emails: list, team: dict) -> dict:
     Returns:
         dict: {"success": [...], "failed": [...]}
     """
-    log.info(f"批量邀请 {len(emails)} 个邮箱到 {team['name']} (ID: {team['account_id'][:8]}...)", icon="email")
+    log.info(
+        f"批量邀请 {len(emails)} 个邮箱到 {team['name']} (ID: {team['account_id'][:8]}...)",
+        icon="email",
+    )
 
     headers = build_invite_headers(team)
     payload = {
         "email_addresses": emails,
         "role": "standard-user",
-        "resend_emails": True
+        "resend_emails": True,
     }
-    invite_url = f"https://chatgpt.com/backend-api/accounts/{team['account_id']}/invites"
+    invite_url = (
+        f"https://chatgpt.com/backend-api/accounts/{team['account_id']}/invites"
+    )
 
-    result = {
-        "success": [],
-        "failed": []
-    }
+    result = {"success": [], "failed": []}
 
     try:
-        response = http_session.post(invite_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+        response = http_session.post(
+            invite_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+        )
 
         if response.status_code == 200:
             resp_data = response.json()
@@ -301,14 +315,18 @@ def batch_invite_to_team(emails: list, team: dict) -> dict:
                         log.error(f"邀请失败: {err_email} - {err_msg}")
 
             # 如果没有明确的成功/失败信息，假设全部成功
-            if not resp_data.get("account_invites") and not resp_data.get("errored_emails"):
+            if not resp_data.get("account_invites") and not resp_data.get(
+                "errored_emails"
+            ):
                 result["success"] = emails
                 for email in emails:
                     log.success(f"邀请成功: {email}")
 
         else:
             log.error(f"批量邀请失败: HTTP {response.status_code}")
-            result["failed"] = [{"email": e, "error": f"HTTP {response.status_code}"} for e in emails]
+            result["failed"] = [
+                {"email": e, "error": f"HTTP {response.status_code}"} for e in emails
+            ]
 
     except Exception as e:
         log.error(f"批量邀请异常: {e}")
@@ -320,11 +338,11 @@ def batch_invite_to_team(emails: list, team: dict) -> dict:
 
 def invite_single_to_team(email: str, team: dict) -> bool:
     """邀请单个邮箱到 Team
-    
+
     Args:
         email: 邮箱地址
         team: Team 配置
-        
+
     Returns:
         bool: 是否成功
     """
@@ -344,7 +362,9 @@ def get_team_stats(team: dict) -> dict:
     headers = build_invite_headers(team)
 
     # 获取订阅信息
-    subs_url = f"https://chatgpt.com/backend-api/subscriptions?account_id={team['account_id']}"
+    subs_url = (
+        f"https://chatgpt.com/backend-api/subscriptions?account_id={team['account_id']}"
+    )
 
     try:
         response = http_session.get(subs_url, headers=headers, timeout=REQUEST_TIMEOUT)
@@ -422,9 +442,9 @@ def print_team_summary(team: dict):
     log.info(f"{team['name']} 状态 (ID: {team['account_id'][:8]}...)", icon="team")
 
     if stats:
-        seats_in_use = stats.get('seats_in_use', 0)
-        seats_entitled = stats.get('seats_entitled', 5)
-        pending_count = stats.get('pending_invites', 0)
+        seats_in_use = stats.get("seats_in_use", 0)
+        seats_entitled = stats.get("seats_entitled", 5)
+        pending_count = stats.get("pending_invites", 0)
         # 可用席位 = 总席位 - 已使用 - 待处理邀请
         available = seats_entitled - seats_in_use - pending_count
         seats_info = f"席位: {seats_in_use}/{seats_entitled}"

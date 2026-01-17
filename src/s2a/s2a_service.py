@@ -13,7 +13,7 @@ from urllib3.util.retry import Retry
 from urllib.parse import urlparse, parse_qs
 from typing import Optional, Tuple, Dict, List, Any
 
-from config import (
+from src.core.config import (
     S2A_API_BASE,
     S2A_ADMIN_KEY,
     S2A_ADMIN_TOKEN,
@@ -26,7 +26,7 @@ from config import (
     PROXY_ENABLED,
     get_proxy_dict,
 )
-from logger import log
+from src.core.logger import log
 
 
 # ==================== 分组 ID 缓存 ====================
@@ -40,7 +40,7 @@ def create_session_with_retry() -> requests.Session:
         total=5,
         backoff_factor=1,
         status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS"]
+        allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS"],
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("https://", adapter)
@@ -66,7 +66,7 @@ def build_s2a_headers() -> Dict[str, str]:
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
-        "user-agent": USER_AGENT
+        "user-agent": USER_AGENT,
     }
 
     if S2A_ADMIN_KEY:
@@ -84,10 +84,16 @@ def get_auth_method() -> Tuple[str, str]:
         tuple: (method_name, credential_preview)
     """
     if S2A_ADMIN_KEY:
-        preview = S2A_ADMIN_KEY[:16] + "..." if len(S2A_ADMIN_KEY) > 16 else S2A_ADMIN_KEY
+        preview = (
+            S2A_ADMIN_KEY[:16] + "..." if len(S2A_ADMIN_KEY) > 16 else S2A_ADMIN_KEY
+        )
         return "Admin API Key", preview
     elif S2A_ADMIN_TOKEN:
-        preview = S2A_ADMIN_TOKEN[:16] + "..." if len(S2A_ADMIN_TOKEN) > 16 else S2A_ADMIN_TOKEN
+        preview = (
+            S2A_ADMIN_TOKEN[:16] + "..."
+            if len(S2A_ADMIN_TOKEN) > 16
+            else S2A_ADMIN_TOKEN
+        )
         return "JWT Token", preview
     return "None", ""
 
@@ -102,7 +108,7 @@ def s2a_get_groups() -> List[Dict[str, Any]]:
             f"{S2A_API_BASE}/admin/groups",
             headers=headers,
             params={"page": 1, "page_size": 100},
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -195,7 +201,7 @@ def s2a_verify_connection() -> Tuple[bool, str]:
             f"{S2A_API_BASE}/admin/groups",
             headers=headers,
             params={"page": 1, "page_size": 1},
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -233,7 +239,9 @@ def s2a_verify_connection() -> Tuple[bool, str]:
 
 
 # ==================== OAuth 授权 ====================
-def s2a_generate_auth_url(proxy_id: Optional[int] = None) -> Tuple[Optional[str], Optional[str]]:
+def s2a_generate_auth_url(
+    proxy_id: Optional[int] = None,
+) -> Tuple[Optional[str], Optional[str]]:
     """生成 OpenAI OAuth 授权 URL
 
     Returns:
@@ -250,7 +258,7 @@ def s2a_generate_auth_url(proxy_id: Optional[int] = None) -> Tuple[Optional[str]
             f"{S2A_API_BASE}/admin/openai/generate-auth-url",
             headers=headers,
             json=payload,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -261,7 +269,9 @@ def s2a_generate_auth_url(proxy_id: Optional[int] = None) -> Tuple[Optional[str]
                 session_id = data.get("session_id")
 
                 if auth_url and session_id:
-                    log.success(f"生成 S2A 授权 URL 成功 (Session: {session_id[:16]}...)")
+                    log.success(
+                        f"生成 S2A 授权 URL 成功 (Session: {session_id[:16]}...)"
+                    )
                     return auth_url, session_id
 
         log.error(f"生成 S2A 授权 URL 失败: HTTP {response.status_code}")
@@ -273,10 +283,7 @@ def s2a_generate_auth_url(proxy_id: Optional[int] = None) -> Tuple[Optional[str]
 
 
 def s2a_create_account_from_oauth(
-    code: str,
-    session_id: str,
-    name: str = "",
-    proxy_id: Optional[int] = None
+    code: str, session_id: str, name: str = "", proxy_id: Optional[int] = None
 ) -> Optional[Dict[str, Any]]:
     """一步完成：用授权码换取 token 并创建账号
 
@@ -311,7 +318,7 @@ def s2a_create_account_from_oauth(
             f"{S2A_API_BASE}/admin/openai/create-from-oauth",
             headers=headers,
             json=payload,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -320,7 +327,9 @@ def s2a_create_account_from_oauth(
                 account_data = result.get("data", {})
                 account_id = account_data.get("id")
                 account_name = account_data.get("name")
-                log.success(f"S2A 账号创建成功 (ID: {account_id}, Name: {account_name})")
+                log.success(
+                    f"S2A 账号创建成功 (ID: {account_id}, Name: {account_name})"
+                )
                 return account_data
             else:
                 log.error(f"S2A 账号创建失败: {result.get('message', 'Unknown error')}")
@@ -335,9 +344,7 @@ def s2a_create_account_from_oauth(
 
 
 def s2a_add_account(
-    name: str,
-    token_info: Dict[str, Any],
-    proxy_id: Optional[int] = None
+    name: str, token_info: Dict[str, Any], proxy_id: Optional[int] = None
 ) -> Optional[Dict[str, Any]]:
     """将账号添加到 S2A 账号池
 
@@ -384,7 +391,7 @@ def s2a_add_account(
             f"{S2A_API_BASE}/admin/accounts",
             headers=headers,
             json=payload,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -417,7 +424,7 @@ def s2a_get_accounts(platform: str = "openai") -> List[Dict[str, Any]]:
             f"{S2A_API_BASE}/admin/accounts",
             headers=headers,
             params=params,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:

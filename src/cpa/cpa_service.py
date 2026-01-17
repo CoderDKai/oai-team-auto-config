@@ -13,7 +13,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from urllib.parse import urlparse, parse_qs
 
-from config import (
+from src.core.config import (
     CPA_API_BASE,
     CPA_ADMIN_PASSWORD,
     CPA_POLL_INTERVAL,
@@ -24,7 +24,7 @@ from config import (
     PROXY_ENABLED,
     get_proxy_dict,
 )
-from logger import log
+from src.core.logger import log
 
 
 def create_session_with_retry():
@@ -34,7 +34,7 @@ def create_session_with_retry():
         total=5,
         backoff_factor=1,
         status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "POST", "OPTIONS"]
+        allowed_methods=["HEAD", "GET", "POST", "OPTIONS"],
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("https://", adapter)
@@ -61,7 +61,7 @@ def build_cpa_headers() -> dict:
         "accept": "application/json",
         "authorization": f"Bearer {CPA_ADMIN_PASSWORD}",
         "content-type": "application/json",
-        "user-agent": USER_AGENT
+        "user-agent": USER_AGENT,
     }
 
 
@@ -90,7 +90,7 @@ def cpa_verify_connection() -> tuple[bool, str]:
             f"{CPA_API_BASE}/v0/management/codex-auth-url",
             headers=headers,
             params={"is_webui": str(CPA_IS_WEBUI).lower()},
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -136,7 +136,7 @@ def cpa_generate_auth_url() -> tuple[str, str]:
             f"{CPA_API_BASE}/v0/management/codex-auth-url",
             headers=headers,
             params={"is_webui": str(CPA_IS_WEBUI).lower()},
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -177,17 +177,14 @@ def cpa_submit_callback(redirect_url: str) -> bool:
         bool: 是否提交成功
     """
     headers = build_cpa_headers()
-    payload = {
-        "provider": "codex",
-        "redirect_url": redirect_url
-    }
+    payload = {"provider": "codex", "redirect_url": redirect_url}
 
     try:
         response = http_session.post(
             f"{CPA_API_BASE}/v0/management/oauth-callback",
             headers=headers,
             json=payload,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -230,7 +227,7 @@ def cpa_check_auth_status(state: str) -> tuple[bool, str]:
             f"{CPA_API_BASE}/v0/management/get-auth-status",
             headers=headers,
             params={"state": state},
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
         )
 
         if response.status_code == 200:
@@ -268,7 +265,9 @@ def cpa_poll_auth_status(state: str) -> bool:
             log.success(f"CPA 授权成功: {message}")
             return True
 
-        log.progress_inline(f"[CPA轮询中... {attempt + 1}/{CPA_POLL_MAX_RETRIES}] {message}")
+        log.progress_inline(
+            f"[CPA轮询中... {attempt + 1}/{CPA_POLL_MAX_RETRIES}] {message}"
+        )
         time.sleep(CPA_POLL_INTERVAL)
 
     log.progress_clear()
@@ -297,7 +296,7 @@ def extract_callback_info(url: str) -> dict:
             "code": params.get("code", [None])[0],
             "scope": params.get("scope", [None])[0],
             "state": params.get("state", [None])[0],
-            "full_url": url
+            "full_url": url,
         }
     except Exception as e:
         log.error(f"解析 CPA 回调 URL 失败: {e}")

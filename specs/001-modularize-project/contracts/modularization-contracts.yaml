@@ -1,0 +1,42 @@
+openapi: 3.0.3
+info:
+  title: Modularization Governance Contracts
+  version: 1.0.0
+  description: Contracts for module catalog, dependency rules, and change impact governance
+paths:
+  /modules:
+    get:
+      summary: List modules
+      responses:
+        "200":
+          description: Module list
+  /modules/{moduleId}:
+    get:
+      summary: Get module details
+      parameters:
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Module details
+  /dependency-rules:
+    get:
+      summary: Get dependency rules
+      responses:
+        "200":
+          description: Dependency rules
+  /change-impact:
+    post:
+      summary: Evaluate change impact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Change impact result

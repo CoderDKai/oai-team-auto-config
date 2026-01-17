@@ -10,7 +10,7 @@ from typing import Callable, TypeVar, Optional, Any
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from config import (
+from src.core.config import (
     EMAIL_API_BASE,
     EMAIL_API_AUTH,
     EMAIL_ROLE,
@@ -28,7 +28,7 @@ from config import (
     GPTMAIL_DOMAINS,
     get_random_gptmail_domain,
 )
-from logger import log
+from src.core.logger import log
 
 
 def create_session_with_retry():
@@ -38,7 +38,7 @@ def create_session_with_retry():
         total=5,
         backoff_factor=1,
         status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "POST", "OPTIONS"]
+        allowed_methods=["HEAD", "GET", "POST", "OPTIONS"],
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("https://", adapter)
@@ -58,7 +58,7 @@ http_session = create_session_with_retry()
 
 
 # ==================== 通用轮询重试工具 ====================
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class PollResult:
@@ -150,10 +150,7 @@ class GPTMailService:
     def __init__(self, api_base: str = None, api_key: str = None):
         self.api_base = api_base or GPTMAIL_API_BASE
         self.api_key = api_key or GPTMAIL_API_KEY
-        self.headers = {
-            "X-API-Key": self.api_key,
-            "Content-Type": "application/json"
-        }
+        self.headers = {"X-API-Key": self.api_key, "Content-Type": "application/json"}
 
     def generate_email(self, prefix: str = None, domain: str = None) -> tuple[str, str]:
         """生成临时邮箱地址
@@ -174,9 +171,13 @@ class GPTMailService:
                     payload["prefix"] = prefix
                 if domain:
                     payload["domain"] = domain
-                response = http_session.post(url, headers=self.headers, json=payload, timeout=REQUEST_TIMEOUT)
+                response = http_session.post(
+                    url, headers=self.headers, json=payload, timeout=REQUEST_TIMEOUT
+                )
             else:
-                response = http_session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT)
+                response = http_session.get(
+                    url, headers=self.headers, timeout=REQUEST_TIMEOUT
+                )
 
             data = response.json()
 
@@ -206,7 +207,9 @@ class GPTMailService:
         params = {"email": email}
 
         try:
-            response = http_session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT)
+            response = http_session.get(
+                url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT
+            )
             data = response.json()
 
             if data.get("success"):
@@ -232,7 +235,9 @@ class GPTMailService:
         url = f"{self.api_base}/api/email/{email_id}"
 
         try:
-            response = http_session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT)
+            response = http_session.get(
+                url, headers=self.headers, timeout=REQUEST_TIMEOUT
+            )
             data = response.json()
 
             if data.get("success"):
@@ -257,7 +262,9 @@ class GPTMailService:
         url = f"{self.api_base}/api/email/{email_id}"
 
         try:
-            response = http_session.delete(url, headers=self.headers, timeout=REQUEST_TIMEOUT)
+            response = http_session.delete(
+                url, headers=self.headers, timeout=REQUEST_TIMEOUT
+            )
             data = response.json()
 
             if data.get("success"):
@@ -281,7 +288,9 @@ class GPTMailService:
         params = {"email": email}
 
         try:
-            response = http_session.delete(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT)
+            response = http_session.delete(
+                url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT
+            )
             data = response.json()
 
             if data.get("success"):
@@ -293,7 +302,9 @@ class GPTMailService:
         except Exception as e:
             return 0, str(e)
 
-    def get_verification_code(self, email: str, max_retries: int = None, interval: int = None) -> tuple[str, str, str]:
+    def get_verification_code(
+        self, email: str, max_retries: int = None, interval: int = None
+    ) -> tuple[str, str, str]:
         """从邮箱获取验证码 (使用通用轮询重试)
 
         Args:
@@ -339,7 +350,7 @@ class GPTMailService:
             check_func=check_for_code,
             max_retries=max_retries,
             interval=interval,
-            description="GPTMail 获取邮件"
+            description="GPTMail 获取邮件",
         )
 
         if result.success:
@@ -380,14 +391,16 @@ gptmail_service = GPTMailService()
 
 def generate_random_email() -> str:
     """生成随机邮箱地址: {random_str}oaiteam@{random_domain}"""
-    random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    random_str = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
     domain = get_random_domain()
     email = f"{random_str}oaiteam@{domain}"
     log.success(f"生成邮箱: {email}")
     return email
 
 
-def create_email_user(email: str, password: str = None, role_name: str = None) -> tuple[bool, str]:
+def create_email_user(
+    email: str, password: str = None, role_name: str = None
+) -> tuple[bool, str]:
     """在邮箱平台创建用户 (与 main.py 一致)
 
     Args:
@@ -404,17 +417,14 @@ def create_email_user(email: str, password: str = None, role_name: str = None) -
         role_name = EMAIL_ROLE
 
     url = f"{EMAIL_API_BASE}/addUser"
-    headers = {
-        "Authorization": EMAIL_API_AUTH,
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "list": [{"email": email, "password": password, "roleName": role_name}]
-    }
+    headers = {"Authorization": EMAIL_API_AUTH, "Content-Type": "application/json"}
+    payload = {"list": [{"email": email, "password": password, "roleName": role_name}]}
 
     try:
         log.info(f"创建邮箱用户: {email}", icon="email")
-        response = http_session.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+        response = http_session.post(
+            url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+        )
         data = response.json()
         success = data.get("code") == 200
         msg = data.get("message", "Unknown error")
@@ -430,7 +440,9 @@ def create_email_user(email: str, password: str = None, role_name: str = None) -
         return False, str(e)
 
 
-def get_verification_code(email: str, max_retries: int = None, interval: int = None) -> tuple[str, str, str]:
+def get_verification_code(
+    email: str, max_retries: int = None, interval: int = None
+) -> tuple[str, str, str]:
     """从邮箱获取验证码 (使用通用轮询重试)
 
     Args:
@@ -442,10 +454,7 @@ def get_verification_code(email: str, max_retries: int = None, interval: int = N
         tuple: (code, error, email_time) - 验证码、错误信息、邮件时间
     """
     url = f"{EMAIL_API_BASE}/emailList"
-    headers = {
-        "Authorization": EMAIL_API_AUTH,
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": EMAIL_API_AUTH, "Content-Type": "application/json"}
     payload = {"toEmail": email}
 
     log.info(f"等待验证码邮件: {email}", icon="email")
@@ -453,7 +462,9 @@ def get_verification_code(email: str, max_retries: int = None, interval: int = N
     # 记录初始邮件数量，用于检测新邮件
     initial_email_count = 0
     try:
-        response = http_session.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+        response = http_session.post(
+            url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+        )
         data = response.json()
         if data.get("code") == 200:
             initial_email_count = len(data.get("data", []))
@@ -465,7 +476,9 @@ def get_verification_code(email: str, max_retries: int = None, interval: int = N
 
     def fetch_emails():
         """获取邮件列表"""
-        response = http_session.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+        response = http_session.post(
+            url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+        )
         data = response.json()
         if data.get("code") == 200:
             emails = data.get("data", [])
@@ -502,7 +515,7 @@ def get_verification_code(email: str, max_retries: int = None, interval: int = N
         check_func=check_for_code,
         max_retries=max_retries,
         interval=interval,
-        description="获取邮件"
+        description="获取邮件",
     )
 
     if result.success:
@@ -523,14 +536,13 @@ def fetch_email_content(email: str) -> list:
         list: 邮件列表
     """
     url = f"{EMAIL_API_BASE}/emailList"
-    headers = {
-        "Authorization": EMAIL_API_AUTH,
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": EMAIL_API_AUTH, "Content-Type": "application/json"}
     payload = {"toEmail": email}
 
     try:
-        response = http_session.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+        response = http_session.post(
+            url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+        )
         data = response.json()
 
         if data.get("code") == 200:
@@ -556,18 +568,16 @@ def batch_create_emails(count: int = 4) -> list:
         email, password = unified_create_email()
 
         if email:
-            accounts.append({
-                "email": email,
-                "password": password
-            })
+            accounts.append({"email": email, "password": password})
         else:
-            log.warning(f"跳过第 {i+1} 个邮箱创建")
+            log.warning(f"跳过第 {i + 1} 个邮箱创建")
 
     log.info(f"邮箱创建完成: {len(accounts)}/{count}", icon="email")
     return accounts
 
 
 # ==================== 统一邮箱接口 (根据配置自动选择) ====================
+
 
 def unified_generate_email() -> str:
     """统一生成邮箱地址接口 (根据 EMAIL_PROVIDER 配置自动选择)
@@ -577,7 +587,9 @@ def unified_generate_email() -> str:
     """
     if EMAIL_PROVIDER == "gptmail":
         # 生成随机前缀 + oaiteam 后缀，确保不重复
-        random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        random_str = "".join(
+            random.choices(string.ascii_lowercase + string.digits, k=8)
+        )
         prefix = f"{random_str}-oaiteam"
         domain = get_random_gptmail_domain() or None
         email, error = gptmail_service.generate_email(prefix=prefix, domain=domain)
@@ -597,7 +609,9 @@ def unified_create_email() -> tuple[str, str]:
     """
     if EMAIL_PROVIDER == "gptmail":
         # 生成随机前缀 + oaiteam 后缀，确保不重复
-        random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        random_str = "".join(
+            random.choices(string.ascii_lowercase + string.digits, k=8)
+        )
         prefix = f"{random_str}-oaiteam"
         domain = get_random_gptmail_domain() or None
         email, error = gptmail_service.generate_email(prefix=prefix, domain=domain)
@@ -614,7 +628,9 @@ def unified_create_email() -> tuple[str, str]:
     return None, None
 
 
-def unified_get_verification_code(email: str, max_retries: int = None, interval: int = None) -> tuple[str, str, str]:
+def unified_get_verification_code(
+    email: str, max_retries: int = None, interval: int = None
+) -> tuple[str, str, str]:
     """统一获取验证码接口 (根据 EMAIL_PROVIDER 配置自动选择)
 
     Args:

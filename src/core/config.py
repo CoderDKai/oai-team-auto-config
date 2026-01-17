@@ -11,12 +11,14 @@ try:
     import tomllib
 except ImportError:
     try:
-        import tomli as tomllib
-    except ImportError:
+        import importlib
+
+        tomllib = importlib.import_module("tomli")
+    except Exception:
         tomllib = None
 
 # ==================== 路径 ====================
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).resolve().parents[2]
 CONFIG_FILE = BASE_DIR / "config.toml"
 TEAM_JSON_FILE = BASE_DIR / "team.json"
 
@@ -27,7 +29,7 @@ TEAM_JSON_FILE = BASE_DIR / "team.json"
 _config_errors = []  # 存储配置加载错误，供后续日志记录
 
 
-def _log_config(level: str, source: str, message: str, details: str = None):
+def _log_config(level: str, source: str, message: str, details: str | None = None):
     """记录配置加载日志 (启动时使用)
 
     Args:
@@ -51,7 +53,9 @@ def _log_config(level: str, source: str, message: str, details: str = None):
 
     # 存储错误信息供后续使用
     if level in ("ERROR", "WARNING"):
-        _config_errors.append({"level": level, "source": source, "message": message, "details": details})
+        _config_errors.append(
+            {"level": level, "source": source, "message": message, "details": details}
+        )
 
 
 def get_config_errors() -> list:
@@ -62,7 +66,12 @@ def get_config_errors() -> list:
 def _load_toml() -> dict:
     """加载 TOML 配置文件"""
     if tomllib is None:
-        _log_config("WARNING", "config.toml", "tomllib 未安装", "请安装 tomli: pip install tomli")
+        _log_config(
+            "WARNING",
+            "config.toml",
+            "tomllib 未安装",
+            "请安装 tomli: pip install tomli",
+        )
         return {}
 
     if not CONFIG_FILE.exists():
@@ -115,14 +124,14 @@ _raw_teams = _load_teams()
 
 def _parse_team_config(t: dict, index: int) -> dict:
     """解析单个 Team 配置，支持多种格式
-    
+
     格式1 (旧格式):
     {
         "user": {"email": "xxx@xxx.com"},
         "account": {"id": "...", "organizationId": "..."},
         "accessToken": "..."
     }
-    
+
     格式2/3 (新格式):
     {
         "account": "xxx@xxx.com",  # 邮箱
@@ -135,7 +144,7 @@ def _parse_team_config(t: dict, index: int) -> dict:
     if isinstance(t.get("account"), str):
         # 新格式: account 是邮箱字符串
         email = t.get("account", "")
-        name = email.split("@")[0] if "@" in email else f"Team{index+1}"
+        name = email.split("@")[0] if "@" in email else f"Team{index + 1}"
         token = t.get("token", "")
         authorized = t.get("authorized", False)
         cached_account_id = t.get("account_id", "")
@@ -148,14 +157,14 @@ def _parse_team_config(t: dict, index: int) -> dict:
             "owner_email": email,
             "owner_password": t.get("password", ""),
             "needs_login": not token,  # 无 token 需要登录
-            "authorized": authorized,   # 是否已授权
+            "authorized": authorized,  # 是否已授权
             "format": "new",
-            "raw": t
+            "raw": t,
         }
     else:
         # 旧格式: account 是对象
-        email = t.get("user", {}).get("email", f"Team{index+1}")
-        name = email.split("@")[0] if "@" in email else f"Team{index+1}"
+        email = t.get("user", {}).get("email", f"Team{index + 1}")
+        name = email.split("@")[0] if "@" in email else f"Team{index + 1}"
         return {
             "name": name,
             "account_id": t.get("account", {}).get("id", ""),
@@ -164,7 +173,7 @@ def _parse_team_config(t: dict, index: int) -> dict:
             "owner_email": email,
             "owner_password": "",
             "format": "old",
-            "raw": t
+            "raw": t,
         }
 
 
@@ -211,6 +220,7 @@ def save_team_json():
         _log_config("ERROR", "team.json", "保存失败", str(e))
         return False
 
+
 # 邮箱系统选择
 EMAIL_PROVIDER = _cfg.get("email_provider", "kyx")  # "kyx" 或 "gptmail"
 
@@ -218,7 +228,9 @@ EMAIL_PROVIDER = _cfg.get("email_provider", "kyx")  # "kyx" 或 "gptmail"
 _email = _cfg.get("email", {})
 EMAIL_API_BASE = _email.get("api_base", "")
 EMAIL_API_AUTH = _email.get("api_auth", "")
-EMAIL_DOMAINS = _email.get("domains", []) or ([_email["domain"]] if _email.get("domain") else [])
+EMAIL_DOMAINS = _email.get("domains", []) or (
+    [_email["domain"]] if _email.get("domain") else []
+)
 EMAIL_DOMAIN = EMAIL_DOMAINS[0] if EMAIL_DOMAINS else ""
 EMAIL_ROLE = _email.get("role", "gpt-team")
 EMAIL_WEB_URL = _email.get("web_url", "")
@@ -298,7 +310,9 @@ _domain_blacklist = _load_blacklist()
 
 # 授权服务选择: "crs" 或 "cpa"
 # 注意: auth_provider 可能在顶层或被误放在 gptmail section 下
-AUTH_PROVIDER = _cfg.get("auth_provider") or _cfg.get("gptmail", {}).get("auth_provider", "crs")
+AUTH_PROVIDER = _cfg.get("auth_provider") or _cfg.get("gptmail", {}).get(
+    "auth_provider", "crs"
+)
 
 # 是否将 Team Owner 也添加到授权服务
 INCLUDE_TEAM_OWNERS = _cfg.get("include_team_owners", False)
@@ -344,10 +358,13 @@ def get_random_birthday() -> dict:
     day = str(random.randint(1, 28)).zfill(2)  # 用28避免月份天数问题
     return {"year": year, "month": month, "day": day}
 
+
 # 请求
 _req = _cfg.get("request", {})
 REQUEST_TIMEOUT = _req.get("timeout", 30)
-USER_AGENT = _req.get("user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/135.0.0.0")
+USER_AGENT = _req.get(
+    "user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/135.0.0.0"
+)
 
 # 验证码
 _ver = _cfg.get("verification", {})
@@ -373,7 +390,7 @@ _proxy_index = 0
 
 
 # ==================== 代理辅助函数 ====================
-def get_next_proxy() -> dict:
+def get_next_proxy() -> dict | None:
     """轮换获取下一个代理"""
     global _proxy_index
     if not PROXIES:
@@ -383,14 +400,14 @@ def get_next_proxy() -> dict:
     return proxy
 
 
-def get_random_proxy() -> dict:
+def get_random_proxy() -> dict | None:
     """随机获取一个代理"""
     if not PROXIES:
         return None
     return random.choice(PROXIES)
 
 
-def format_proxy_url(proxy: dict) -> str:
+def format_proxy_url(proxy: dict | None) -> str | None:
     """格式化代理URL: socks5://user:pass@host:port"""
     if not proxy:
         return None
@@ -404,7 +421,7 @@ def format_proxy_url(proxy: dict) -> str:
     return f"{p_type}://{host}:{port}"
 
 
-def get_proxy_dict() -> dict:
+def get_proxy_dict() -> dict | None:
     """获取 requests 库使用的代理字典格式
 
     Returns:
@@ -422,25 +439,74 @@ def get_proxy_dict() -> dict:
         return None
 
     # requests 库的代理格式
-    return {
-        "http": proxy_url,
-        "https": proxy_url
-    }
+    return {"http": proxy_url, "https": proxy_url}
 
 
 # ==================== 随机姓名列表 ====================
 FIRST_NAMES = [
-    "James", "John", "Robert", "Michael", "William", "David", "Richard", "Joseph",
-    "Thomas", "Christopher", "Charles", "Daniel", "Matthew", "Anthony", "Mark",
-    "Mary", "Patricia", "Jennifer", "Linda", "Elizabeth", "Barbara", "Susan",
-    "Jessica", "Sarah", "Karen", "Emma", "Olivia", "Sophia", "Isabella", "Mia"
+    "James",
+    "John",
+    "Robert",
+    "Michael",
+    "William",
+    "David",
+    "Richard",
+    "Joseph",
+    "Thomas",
+    "Christopher",
+    "Charles",
+    "Daniel",
+    "Matthew",
+    "Anthony",
+    "Mark",
+    "Mary",
+    "Patricia",
+    "Jennifer",
+    "Linda",
+    "Elizabeth",
+    "Barbara",
+    "Susan",
+    "Jessica",
+    "Sarah",
+    "Karen",
+    "Emma",
+    "Olivia",
+    "Sophia",
+    "Isabella",
+    "Mia",
 ]
 
 LAST_NAMES = [
-    "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis",
-    "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson",
-    "Thomas", "Taylor", "Moore", "Jackson", "Martin", "Lee", "Thompson", "White",
-    "Harris", "Clark", "Lewis", "Robinson", "Walker", "Young", "Allen"
+    "Smith",
+    "Johnson",
+    "Williams",
+    "Brown",
+    "Jones",
+    "Garcia",
+    "Miller",
+    "Davis",
+    "Rodriguez",
+    "Martinez",
+    "Hernandez",
+    "Lopez",
+    "Gonzalez",
+    "Wilson",
+    "Anderson",
+    "Thomas",
+    "Taylor",
+    "Moore",
+    "Jackson",
+    "Martin",
+    "Lee",
+    "Thompson",
+    "White",
+    "Harris",
+    "Clark",
+    "Lewis",
+    "Robinson",
+    "Walker",
+    "Young",
+    "Allen",
 ]
 
 
@@ -460,7 +526,7 @@ FINGERPRINTS = [
         "webgl_renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0)",
         "language": "en-US",
         "timezone": "America/New_York",
-        "screen": {"width": 1920, "height": 1080}
+        "screen": {"width": 1920, "height": 1080},
     },
     {
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
@@ -469,7 +535,7 @@ FINGERPRINTS = [
         "webgl_renderer": "ANGLE (AMD, AMD Radeon RX 6800 XT Direct3D11 vs_5_0 ps_5_0)",
         "language": "en-US",
         "timezone": "America/Los_Angeles",
-        "screen": {"width": 2560, "height": 1440}
+        "screen": {"width": 2560, "height": 1440},
     },
     {
         "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -478,7 +544,7 @@ FINGERPRINTS = [
         "webgl_renderer": "ANGLE (Apple, Apple M1 Pro, OpenGL 4.1)",
         "language": "en-US",
         "timezone": "America/Chicago",
-        "screen": {"width": 1728, "height": 1117}
+        "screen": {"width": 1728, "height": 1117},
     },
     {
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -487,8 +553,8 @@ FINGERPRINTS = [
         "webgl_renderer": "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0)",
         "language": "en-GB",
         "timezone": "Europe/London",
-        "screen": {"width": 1920, "height": 1200}
-    }
+        "screen": {"width": 1920, "height": 1200},
+    },
 ]
 
 
@@ -503,12 +569,14 @@ def get_random_domain() -> str:
 
 
 def generate_random_email(prefix_len: int = 8) -> str:
-    prefix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=prefix_len))
+    prefix = "".join(
+        random.choices(string.ascii_lowercase + string.digits, k=prefix_len)
+    )
     return f"{prefix}oaiteam@{get_random_domain()}"
 
 
 def generate_email_for_user(username: str) -> str:
-    safe = re.sub(r'[^a-zA-Z0-9]', '', username.lower())[:20]
+    safe = re.sub(r"[^a-zA-Z0-9]", "", username.lower())[:20]
     return f"{safe}oaiteam@{get_random_domain()}"
 
 
@@ -521,4 +589,6 @@ def get_team_by_email(email: str) -> dict:
 
 
 def get_team_by_org(org_id: str) -> dict:
-    return next((t for t in TEAMS if t.get("account", {}).get("organizationId") == org_id), {})
+    return next(
+        (t for t in TEAMS if t.get("account", {}).get("organizationId") == org_id), {}
+    )
