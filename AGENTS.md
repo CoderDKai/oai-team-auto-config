@@ -3,6 +3,7 @@
 Auto-generated from all feature plans. Last updated: 2026-01-17
 
 ## Active Technologies
+- 文件（如 accounts.csv、team_tracker.json） (001-split-registration-ingest)
 
 - Python 3.12 + drissionpage, requests, rich, tomli, setuptools (001-modularize-project)
 
@@ -22,6 +23,7 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.12: Follow standard conventions
 
 ## Recent Changes
+- 001-split-registration-ingest: Added Python 3.12 + drissionpage, requests, rich, tomli, setuptools
 
 - 001-modularize-project: Added Python 3.12 + drissionpage, requests, rich, tomli, setuptools
 

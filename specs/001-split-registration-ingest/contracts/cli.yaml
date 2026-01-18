@@ -1,0 +1,115 @@
+openapi: 3.0.3
+info:
+  title: Single Scripts Contract
+  description: 注册与入库脚本的输入输出契约
+  version: 1.0.0
+paths:
+  /register:
+    post:
+      summary: 注册账号
+      operationId: registerAccounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: 注册完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionResult'
+        '400':
+          description: 参数错误
+  /ingest:
+    post:
+      summary: 入库账号
+      operationId: ingestAccounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestRequest'
+      responses:
+        '200':
+          description: 入库完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionResult'
+        '400':
+          description: 参数错误
+components:
+  schemas:
+    Account:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+    InputSource:
+      type: object
+      required:
+        - source_type
+        - value
+      properties:
+        source_type:
+          type: string
+          enum: [inline, file]
+        value:
+          type: string
+    RegisterRequest:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          $ref: '#/components/schemas/InputSource'
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+    IngestRequest:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          $ref: '#/components/schemas/InputSource'
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+    ExecutionResult:
+      type: object
+      required:
+        - status
+        - records
+      properties:
+        status:
+          type: string
+          enum: [success, failure]
+        message:
+          type: string
+        records:
+          type: array
+          items:
+            type: object
+            properties:
+              email:
+                type: string
+              status:
+                type: string
+                enum: [success, failure]
+              error:
+                type: string
