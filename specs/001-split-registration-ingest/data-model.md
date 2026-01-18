@@ -22,10 +22,18 @@
 - **records**: 每个账号的处理结果明细
 
 ## 2. 验证规则
-- Account 必须包含 `email` 与 `password`。
+- Account 必须包含 `account` 与 `password`。
 - Input Source 的 `source_type` 只能为 `inline` 或 `file`，且 `value` 不可为空。
 - Execution Result 必须包含总体状态与逐账号明细。
 
-## 3. 关系说明
+## 3. 输入映射
+- 当 `source_type=inline` 时，`value` 为 JSON 字符串，解析得到 `Account` 列表。
+- 当 `source_type=file` 时，`value` 为 JSON 文件路径，读取后得到 `Account` 列表。
+
+## 4. 输出结构
+- 统一输出包含 `status`、`message` 和 `records`。
+- `records` 中每条记录至少包含 `account` 与处理结果状态。
+
+## 5. 关系说明
 - 一个 Input Source 可生成多个 Account。
 - 每次脚本执行对应一个 Execution Result。
