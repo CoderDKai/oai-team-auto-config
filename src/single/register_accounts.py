@@ -89,9 +89,9 @@ def register_single_account(account_info: Dict[str, str]) -> bool:
     email = account_info["account"]
     password = account_info["password"]
 
-    log.info(f"\n{'=' * 60}")
+    log.separator()
     log.info(f"处理账号: {email}")
-    log.info(f"{'=' * 60}\n")
+    log.separator()
 
     with browser_context() as page:
         result = register_openai_account(page, email, password)
@@ -106,10 +106,17 @@ def register_single_account(account_info: Dict[str, str]) -> bool:
     return True
 
 
+def print_summary(total: int, success_count: int, failed_accounts: List[str]) -> None:
+    log.header("处理完成")
+    log.info(f"总计: {total} 个账号")
+    log.success(f"成功: {success_count} 个")
+    if failed_accounts:
+        log.error(f"失败: {len(failed_accounts)} 个")
+        log.error(f"失败账号: {', '.join(failed_accounts)}")
+
+
 def main() -> int:
-    log.info("\n" + "=" * 60)
-    log.info("账号注册脚本")
-    log.info("=" * 60 + "\n")
+    log.header("账号注册脚本")
 
     args = parse_arguments()
     accounts = load_accounts(args)
@@ -135,15 +142,7 @@ def main() -> int:
         if idx < total:
             time.sleep(2)
 
-    log.info("\n" + "=" * 60)
-    log.info("处理完成")
-    log.info("=" * 60)
-    log.info(f"总计: {total} 个账号")
-    log.success(f"成功: {success_count} 个")
-    if failed_accounts:
-        log.error(f"失败: {len(failed_accounts)} 个")
-        log.error(f"失败账号: {', '.join(failed_accounts)}")
-    log.info("=" * 60 + "\n")
+    print_summary(total, success_count, failed_accounts)
 
     return 0 if success_count == total else 1
 
